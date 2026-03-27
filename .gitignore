@@ -1,0 +1,9 @@
+# Node dependencies
+server/node_modules/
+
+# Environment secrets
+server/.env
+
+# Firebase service account keys
+**/*firebase-adminsdk*.json
+**/service-account*.json
