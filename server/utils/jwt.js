@@ -12,14 +12,23 @@ const generateToken = (payload) => {
   });
 };
 
-const verifyToken = (token) => {
+const verifyToken = async (token) => {
   const secret = process.env.JWT_SECRET;
 
   if (!secret) {
     throw new Error("JWT_SECRET is not configured");
   }
 
-  return jwt.verify(token, secret);
+  return new Promise((resolve) => {
+    jwt.verify(token, secret, (error, decoded) => {
+      if (error) {
+        resolve(null);
+        return;
+      }
+
+      resolve(decoded);
+    });
+  });
 };
 
 module.exports = {

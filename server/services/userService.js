@@ -60,7 +60,7 @@ const createUser = async (payload) => {
 const verifyCredentials = async (email, password) => {
   const user = await findUserByEmail(email);
 
-  if (!user || !user.isActive) {
+  if (!user?.isActive) {
     return null;
   }
 

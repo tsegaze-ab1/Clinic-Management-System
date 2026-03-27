@@ -2,7 +2,7 @@ const ApiError = require("../utils/apiError");
 
 const roleMiddleware = (...allowedRoles) => {
   return (req, res, next) => {
-    if (!req.user || !req.user.role) {
+    if (!req.user?.role) {
       return next(new ApiError(401, "Unauthorized"));
     }
 
