@@ -15,13 +15,14 @@ if (!admin.apps.length) {
     );
   }
 
-  const credential = hasServiceAccountEnv
-    ? admin.credential.cert({
+  // Prefer JSON file credentials when GOOGLE_APPLICATION_CREDENTIALS is set.
+  const credential = hasGoogleApplicationCredentials
+    ? admin.credential.applicationDefault()
+    : admin.credential.cert({
         projectId: process.env.FIREBASE_PROJECT_ID,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
         privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
-      })
-    : admin.credential.applicationDefault();
+      });
 
   admin.initializeApp({
     credential,

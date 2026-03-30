@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap');
+
+:root {
+  --font-heading: 'Manrope', sans-serif;
+  --font-body: 'Source Serif 4', serif;
+
+  --color-primary: #145a4a;
+  --color-secondary: #d89b4a;
+  --color-background: #f4efe7;
+  --color-surface: #fffdf8;
+  --color-accent: #2b3e61;
+  --color-success: #2a8f5a;
+  --color-warn: #b2781f;
+  --color-error: #b23838;
+  --color-text: #192126;
+  --color-muted: #64707e;
+  --color-border: #ddd2bf;
+  --color-surface-strong: #ffffff;
+  --color-input-bg: #ffffff;
+  --color-sidebar-start: #173f35;
+  --color-sidebar-end: #102a23;
+  --table-header-bg: #1f2937;
+  --table-header-text: #f8fafc;
+  --table-row-bg: #f8fafc;
+  --table-row-border: #e2e8f0;
+  --progress-track: #e2e8f0;
+
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 40px;
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --shadow-card: 0 14px 40px rgba(28, 42, 65, 0.08);
+}
+
+[data-theme='dark'] {
+  --color-primary: #32a287;
+  --color-secondary: #f2b66c;
+  --color-background: #0f1620;
+  --color-surface: #151f2d;
+  --color-surface-strong: #1c2838;
+  --color-accent: #8db2ff;
+  --color-success: #47c487;
+  --color-warn: #efb75f;
+  --color-error: #f07a7a;
+  --color-text: #e7edf7;
+  --color-muted: #9fb0c6;
+  --color-border: #2a3b53;
+  --color-input-bg: #1c2838;
+  --color-sidebar-start: #0f2632;
+  --color-sidebar-end: #0d1a24;
+  --table-header-bg: #243346;
+  --table-header-text: #e7edf7;
+  --table-row-bg: #1c2838;
+  --table-row-border: #2e4158;
+  --progress-track: #26374b;
+  --shadow-card: 0 16px 42px rgba(0, 0, 0, 0.35);
+}
