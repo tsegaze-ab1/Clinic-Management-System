@@ -7,6 +7,16 @@ async function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function parseFailedResponse(response) {
+  const text = await response.text();
+  try {
+    const parsed = JSON.parse(text);
+    return parsed?.message || parsed?.error || 'Request failed';
+  } catch {
+    return text || 'Request failed';
+  }
+}
+
 function enqueueOfflineRequest(config) {
   const key = 'clinic-offline-queue-v1';
   const current = JSON.parse(localStorage.getItem(key) || '[]');
@@ -73,13 +83,8 @@ export async function request({ method = 'GET', url, body, query, headers = {} }
         await sleep(400 * (retry + 1));
         return request({ method, url, body, query, headers }, retry + 1);
       }
-      const text = await response.text();
-      try {
-        const parsed = JSON.parse(text);
-        throw new Error(parsed?.message || parsed?.error || 'Request failed');
-      } catch {
-        throw new Error(text || 'Request failed');
-      }
+
+      throw new Error(await parseFailedResponse(response));
     }
 
     const contentType = response.headers.get('content-type') || '';
