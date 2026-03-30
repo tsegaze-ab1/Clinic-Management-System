@@ -1,5 +1,7 @@
 const { db, timestamp } = require("./firestore");
 const ApiError = require("../utils/apiError");
+const { getPatientById } = require("./patientService");
+const { getUserById } = require("./userService");
 
 const appointmentsCollection = db.collection("appointments");
 
@@ -9,11 +11,19 @@ const mapAppointmentDoc = (doc) => ({
 });
 
 const createAppointment = async (payload) => {
+  const [patient, doctor] = await Promise.all([
+    getPatientById(payload.patientId),
+    getUserById(payload.doctorId)
+  ]);
+
   const docRef = appointmentsCollection.doc();
 
   await docRef.set({
     patientId: payload.patientId,
+    patientUserId: patient.userId || null,
+    patientName: patient.fullName || payload.patientId,
     doctorId: payload.doctorId,
+    doctorName: doctor.name || payload.doctorId,
     createdBy: payload.createdBy,
     date: payload.date,
     time: payload.time,
@@ -37,7 +47,14 @@ const getAppointments = async ({ role, userId }) => {
   }
 
   if (role === "patient") {
-    query = query.where("patientId", "==", userId);
+    const byPatientUserId = await query.where("patientUserId", "==", userId).orderBy("date", "asc").get();
+
+    if (!byPatientUserId.empty) {
+      return byPatientUserId.docs.map(mapAppointmentDoc);
+    }
+
+    const fallbackByPatientId = await query.where("patientId", "==", userId).orderBy("date", "asc").get();
+    return fallbackByPatientId.docs.map(mapAppointmentDoc);
   }
 
   const snapshot = await query.orderBy("date", "asc").get();

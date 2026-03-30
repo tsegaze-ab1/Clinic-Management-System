@@ -1,47 +1,129 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import StatCard from '../../components/primitives/StatCard';
 import DataTable from '../../components/primitives/DataTable';
 import FormSection from '../../components/primitives/FormSection';
 import IngredientSortableTable from '../../ingredients/IngredientSortableTable';
 import {
-  createAppointment,
-  createPatient,
-  firestoreQueryHint,
-  getDoctors,
-  getPatientHistoryRows,
-  listAppointments,
-  listPatients
-} from '../../data/rbacMockStore';
+  createAppointmentApi,
+  createPatientApi,
+  getAppointmentsApi,
+  getPatientsApi,
+  getUsersApi
+} from '../../services/clinicApiService';
 import { useToast } from '../../context/ToastContext';
 
 export default function StaffDashboard() {
   const { pushToast } = useToast();
-  const [tick, setTick] = useState(0);
   const [patientDraft, setPatientDraft] = useState({ fullName: '', phone: '', dob: '', email: '', history: '' });
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [bookingDraft, setBookingDraft] = useState({ patientId: '', doctorId: '', date: '', time: '', status: 'booked' });
+  const [patients, setPatients] = useState([]);
+  const [doctors, setDoctors] = useState([]);
+  const [appointments, setAppointments] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const patients = useMemo(() => listPatients(searchTerm), [searchTerm, tick]);
-  const doctors = useMemo(() => getDoctors(), [tick]);
-  const appointments = useMemo(() => listAppointments(), [tick]);
-  const selectedHistory = useMemo(() => getPatientHistoryRows(selectedPatientId), [selectedPatientId, tick]);
+  const loadDashboardData = async (search = '') => {
+    setLoading(true);
+    try {
+      const [patientsList, appointmentsList, users] = await Promise.all([
+        getPatientsApi(search),
+        getAppointmentsApi(),
+        getUsersApi()
+      ]);
 
-  const registerPatient = () => {
-    if (!patientDraft.fullName || !patientDraft.phone) return;
-    const created = createPatient(patientDraft);
-    setTick((prev) => prev + 1);
-    setSelectedPatientId(created.id);
-    setBookingDraft((prev) => ({ ...prev, patientId: created.id }));
-    setPatientDraft({ fullName: '', phone: '', dob: '', email: '', history: '' });
-    pushToast({ title: 'Patient registered', message: `${created.fullName} added successfully.`, tone: 'success' });
+      const doctorsOnly = users.filter((user) => user.role === 'doctor');
+      const doctorMap = new Map(doctorsOnly.map((doctor) => [doctor.id, doctor.fullName]));
+      const patientMap = new Map(patientsList.map((patient) => [patient.id, patient.fullName]));
+
+      setPatients(patientsList);
+      setDoctors(doctorsOnly);
+      setAppointments(
+        appointmentsList.map((appointment) => ({
+          ...appointment,
+          patientName: appointment.patientName || patientMap.get(appointment.patientId) || appointment.patientId,
+          doctorName: appointment.doctorName || doctorMap.get(appointment.doctorId) || appointment.doctorId
+        }))
+      );
+    } catch (error) {
+      pushToast({ title: 'Dashboard load failed', message: error.message || 'Unable to load receptionist dashboard', tone: 'warn' });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const bookAppointment = () => {
+  useEffect(() => {
+    loadDashboardData('');
+  }, []);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      loadDashboardData(searchTerm);
+    }, 250);
+
+    return () => clearTimeout(timeout);
+  }, [searchTerm]);
+
+  const selectedHistory = useMemo(() => {
+    if (!selectedPatientId) return [];
+
+    return appointments
+      .filter((appointment) => appointment.patientId === selectedPatientId)
+      .flatMap((appointment) => {
+        const rows = [
+          {
+            id: `${appointment.id}-status`,
+            type: 'Appointment',
+            date: `${appointment.date} ${appointment.time}`,
+            detail: `Status: ${appointment.status}`
+          }
+        ];
+
+        if (appointment.diagnosis) {
+          rows.push({
+            id: `${appointment.id}-diagnosis`,
+            type: 'Diagnosis',
+            date: appointment.date,
+            detail: appointment.diagnosis
+          });
+        }
+
+        if (appointment.prescription) {
+          rows.push({
+            id: `${appointment.id}-prescription`,
+            type: 'Prescription',
+            date: appointment.date,
+            detail: appointment.prescription
+          });
+        }
+
+        return rows;
+      });
+  }, [appointments, selectedPatientId]);
+
+  const registerPatient = async () => {
+    if (!patientDraft.fullName || !patientDraft.phone) return;
+    try {
+      const created = await createPatientApi(patientDraft);
+      setSelectedPatientId(created.id);
+      setBookingDraft((prev) => ({ ...prev, patientId: created.id }));
+      setPatientDraft({ fullName: '', phone: '', dob: '', email: '', history: '' });
+      await loadDashboardData(searchTerm);
+      pushToast({ title: 'Patient registered', message: `${created.fullName} added successfully.`, tone: 'success' });
+    } catch (error) {
+      pushToast({ title: 'Registration failed', message: error.message || 'Unable to register patient', tone: 'warn' });
+    }
+  };
+
+  const bookAppointment = async () => {
     if (!bookingDraft.patientId || !bookingDraft.doctorId || !bookingDraft.date || !bookingDraft.time) return;
-    createAppointment(bookingDraft);
-    setTick((prev) => prev + 1);
-    pushToast({ title: 'Appointment booked', message: 'Patient and doctor linked with date/time and status.', tone: 'success' });
+    try {
+      await createAppointmentApi(bookingDraft);
+      await loadDashboardData(searchTerm);
+      pushToast({ title: 'Appointment booked', message: 'Patient and doctor linked with date/time and status.', tone: 'success' });
+    } catch (error) {
+      pushToast({ title: 'Booking failed', message: error.message || 'Unable to create appointment', tone: 'warn' });
+    }
   };
 
   return (
@@ -56,7 +138,7 @@ export default function StaffDashboard() {
           onChange={(e) => {
             const value = e.target.value;
             setSearchTerm(value);
-            const first = listPatients(value)[0];
+            const first = patients[0];
             setSelectedPatientId(first?.id || '');
             setBookingDraft((prev) => ({ ...prev, patientId: first?.id || '' }));
           }}
@@ -66,7 +148,7 @@ export default function StaffDashboard() {
         <StatCard title="Registered Patients" value={patients.length} trend={3} />
         <StatCard title="Booked Appointments" value={appointments.length} trend={2} />
         <StatCard title="Doctors Available" value={doctors.length} trend={1} />
-        <StatCard title="Search Matches" value={listPatients(searchTerm).length} trend={0} />
+        <StatCard title="Search Matches" value={patients.length} trend={0} />
       </div>
 
       <DataTable
@@ -79,11 +161,11 @@ export default function StaffDashboard() {
         ]}
         rows={patients}
         total={patients.length}
-        loading={false}
+        loading={loading}
         onQueryChange={(q) => {
           if (q.search !== undefined) {
             setSearchTerm(q.search);
-            const first = listPatients(q.search)[0];
+            const first = patients[0];
             setSelectedPatientId(first?.id || '');
             setBookingDraft((prev) => ({ ...prev, patientId: first?.id || '' }));
           }
@@ -101,7 +183,7 @@ export default function StaffDashboard() {
         ]}
         rows={appointments}
         total={appointments.length}
-        loading={false}
+        loading={loading}
         onQueryChange={() => {}}
       />
 
@@ -159,7 +241,7 @@ export default function StaffDashboard() {
 
       <div className="page-card">
         <h5>Firestore Query Plan</h5>
-        <p>{firestoreQueryHint()}</p>
+        <p>Fast prefix search uses /patients/search endpoint with indexed full-name and phone normalization.</p>
       </div>
     </div>
   );

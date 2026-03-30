@@ -1,6 +1,6 @@
 import { clearSession, getSession } from '../auth/sessionStore';
 
-const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
+const baseURL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').replace(/\/$/, '');
 const MAX_RETRY = 2;
 
 async function sleep(ms) {
@@ -74,7 +74,12 @@ export async function request({ method = 'GET', url, body, query, headers = {} }
         return request({ method, url, body, query, headers }, retry + 1);
       }
       const text = await response.text();
-      throw new Error(text || 'Request failed');
+      try {
+        const parsed = JSON.parse(text);
+        throw new Error(parsed?.message || parsed?.error || 'Request failed');
+      } catch {
+        throw new Error(text || 'Request failed');
+      }
     }
 
     const contentType = response.headers.get('content-type') || '';

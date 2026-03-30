@@ -1,38 +1,60 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import DataTable from '../../components/primitives/DataTable';
-import {
-  getPatientByEmail,
-  getPatientById,
-  listAppointmentsForPatient,
-  listPrescriptionsForPatient
-} from '../../data/rbacMockStore';
 import { useAuth } from '../../context/AuthContext';
+import { getAppointmentsApi } from '../../services/clinicApiService';
+import { useToast } from '../../context/ToastContext';
 
 export default function PatientPortal() {
+  const { pushToast } = useToast();
   const { user } = useAuth();
+  const [appointments, setAppointments] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const linkedPatient = useMemo(() => {
-    return getPatientByEmail(user?.email);
-  }, [user?.email]);
+  useEffect(() => {
+    let mounted = true;
 
-  const fallbackPatient = useMemo(() => {
-    if (linkedPatient) return linkedPatient;
-    return getPatientById('p-1001');
-  }, [linkedPatient]);
+    async function load() {
+      setLoading(true);
+      try {
+        const rows = await getAppointmentsApi();
+        if (mounted) setAppointments(rows);
+      } catch (error) {
+        pushToast({ title: 'Load failed', message: error.message || 'Unable to load patient appointments', tone: 'warn' });
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
 
-  const appointments = useMemo(() => listAppointmentsForPatient(fallbackPatient?.id), [fallbackPatient?.id]);
-  const prescriptions = useMemo(() => listPrescriptionsForPatient(fallbackPatient?.id), [fallbackPatient?.id]);
+    load();
+
+    return () => {
+      mounted = false;
+    };
+  }, [pushToast]);
+
+  const prescriptions = useMemo(() => {
+    return appointments
+      .filter((appointment) => appointment.diagnosis || appointment.prescription)
+      .map((appointment) => ({
+        id: `${appointment.id}-rx`,
+        doctorName: appointment.doctorName,
+        diagnosis: appointment.diagnosis || '-',
+        medication: appointment.prescription || '-',
+        createdAt: appointment.date || '-'
+      }));
+  }, [appointments]);
 
   return (
     <div className="grid">
       <h2>Patient Portal</h2>
+      {loading ? <p>Loading portal...</p> : null}
 
       <div className="page-card">
         <h5>My Profile</h5>
-        <p>Name: {fallbackPatient?.fullName || user?.fullName || user?.name || 'Patient'}</p>
-        <p>Phone: {fallbackPatient?.phone || 'N/A'}</p>
-        <p>DOB: {fallbackPatient?.dob || 'N/A'}</p>
-        <p>History: {fallbackPatient?.history || 'No history available'}</p>
+        <p>Name: {user?.fullName || user?.name || 'Patient'}</p>
+        <p>Phone: {user?.phone || 'N/A'}</p>
+        <p>Email: {user?.email || 'N/A'}</p>
+        <p>History: {prescriptions.length ? 'Diagnosis and prescriptions are listed below.' : 'No history available'}</p>
       </div>
 
       <DataTable
@@ -45,7 +67,7 @@ export default function PatientPortal() {
         ]}
         rows={appointments}
         total={appointments.length}
-        loading={false}
+        loading={loading}
         onQueryChange={() => {}}
       />
 
@@ -58,7 +80,7 @@ export default function PatientPortal() {
         ]}
         rows={prescriptions}
         total={prescriptions.length}
-        loading={false}
+        loading={loading}
         onQueryChange={() => {}}
       />
     </div>

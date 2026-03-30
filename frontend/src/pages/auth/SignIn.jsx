@@ -31,7 +31,17 @@ function parseAuthPayload(response) {
   const payload = response?.data && typeof response.data === 'object' ? response.data : response;
   const token = payload?.token || payload?.accessToken || payload?.jwt;
   const refreshToken = payload?.refreshToken || payload?.refresh || null;
-  const user = payload?.user || payload?.profile || null;
+  const backendUser = payload?.user || payload?.profile || null;
+  const user = backendUser
+    ? {
+        id: backendUser.id,
+        fullName: backendUser.name || backendUser.fullName || '',
+        name: backendUser.name || backendUser.fullName || '',
+        email: backendUser.email || '',
+        role: backendUser.role,
+        phone: backendUser.phone || ''
+      }
+    : null;
   const role = user?.role || payload?.role || payload?.userRole || 'admin';
 
   return {

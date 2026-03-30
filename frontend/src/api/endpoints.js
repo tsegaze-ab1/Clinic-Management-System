@@ -2,10 +2,10 @@
 // Backend contract files were not present in this workspace, so these routes are inferred.
 export const endpoints = {
   auth: {
-    signIn: '/auth/sign-in',
+    signIn: '/auth/login',
     verifyMfa: '/auth/verify-mfa',
     resetPassword: '/auth/reset-password',
-    me: '/auth/me'
+    me: '/users/me'
   },
   clinics: '/clinics',
   providers: '/providers',

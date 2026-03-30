@@ -69,13 +69,28 @@ export default function Signup() {
     setInfo('');
 
     try {
-      const data = await registerRequest(form);
-      const role = data?.user?.role || form.role || 'patient';
+      const data = await registerRequest({
+        name: form.name,
+        email: form.email,
+        password: form.password,
+        role: form.role
+      });
+      const createdUser = data?.data || data?.user;
+      const role = createdUser?.role || form.role || 'patient';
       login({
-        token: data?.token || 'signup-demo-token',
+        token: data?.token || null,
         refreshToken: data?.refreshToken || null,
         role,
-        user: data?.user || { fullName: form.name, email: form.email, role }
+        user: createdUser
+          ? {
+              id: createdUser.id,
+              fullName: createdUser.name || form.name,
+              name: createdUser.name || form.name,
+              email: createdUser.email || form.email,
+              role: createdUser.role || role,
+              phone: createdUser.phone || ''
+            }
+          : { fullName: form.name, name: form.name, email: form.email, role }
       });
       navigate(redirectPathForRole(role), { replace: true });
     } catch (err) {

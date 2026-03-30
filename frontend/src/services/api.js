@@ -1,8 +1,9 @@
 import { getSession } from '../auth/sessionStore';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080').replace(/\/$/, '');
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 
-async function apiRequest(path, options = {}) {
+export async function apiRequest(path, options = {}) {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   const session = getSession();
   const headers = {
     'Content-Type': 'application/json',
@@ -10,7 +11,7 @@ async function apiRequest(path, options = {}) {
     ...(options.headers || {})
   };
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`${API_BASE_URL}${normalizedPath}`, {
     ...options,
     headers
   });
@@ -19,7 +20,7 @@ async function apiRequest(path, options = {}) {
   const data = contentType.includes('application/json') ? await response.json() : await response.text();
 
   if (!response.ok) {
-    const message = typeof data === 'string' ? data : data?.message || 'Request failed';
+    const message = typeof data === 'string' ? data : data?.message || data?.error || 'Request failed';
     throw new Error(message);
   }
 
@@ -39,5 +40,3 @@ export function registerRequest(payload) {
     body: JSON.stringify(payload)
   });
 }
-
-export { apiRequest };

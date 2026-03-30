@@ -1,51 +1,107 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import StatCard from '../../components/primitives/StatCard';
 import FormSection from '../../components/primitives/FormSection';
 import DataTable from '../../components/primitives/DataTable';
-import { useAuth } from '../../context/AuthContext';
 import {
-  addPrescription,
-  getPatientById,
-  getPatientHistoryRows,
-  listAppointmentsForDoctor,
-  listPrescriptionsForDoctor
-} from '../../data/rbacMockStore';
+  getAppointmentsApi,
+  getPatientApi,
+  updateAppointmentDiagnosisApi
+} from '../../services/clinicApiService';
 import { useToast } from '../../context/ToastContext';
 
 export default function ClinicianDashboard() {
   const { pushToast } = useToast();
-  const { user } = useAuth();
-  const [tick, setTick] = useState(0);
-  const [selectedPatientId, setSelectedPatientId] = useState('');
+  const [appointments, setAppointments] = useState([]);
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState('');
+  const [loading, setLoading] = useState(true);
   const [note, setNote] = useState({ diagnosis: '', medication: '' });
 
-  const appointments = useMemo(() => listAppointmentsForDoctor(user?.id), [user?.id, tick]);
-  const selectedPatient = useMemo(() => getPatientById(selectedPatientId), [selectedPatientId, tick]);
-  const patientHistory = useMemo(() => getPatientHistoryRows(selectedPatientId), [selectedPatientId, tick]);
-  const doctorPrescriptions = useMemo(() => listPrescriptionsForDoctor(user?.id), [user?.id, tick]);
-
-  const submitPrescription = () => {
-    if (!selectedPatientId || !note.diagnosis || !note.medication) return;
-    addPrescription({
-      patientId: selectedPatientId,
-      doctorId: user?.id,
-      doctorName: user?.fullName || user?.name || 'Doctor',
-      diagnosis: note.diagnosis,
-      medication: note.medication
-    });
-    setTick((prev) => prev + 1);
-    setNote({ diagnosis: '', medication: '' });
-    pushToast({ title: 'Prescription saved', message: 'Diagnosis and prescription added to patient record.', tone: 'success' });
+  const loadAppointments = async () => {
+    setLoading(true);
+    try {
+      const rows = await getAppointmentsApi();
+      setAppointments(rows);
+    } catch (error) {
+      pushToast({ title: 'Load failed', message: error.message || 'Unable to load appointments', tone: 'warn' });
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    loadAppointments();
+  }, []);
+
+  const patientHistory = useMemo(() => {
+    if (!selectedPatient?.id) return [];
+
+    return appointments
+      .filter((appointment) => appointment.patientId === selectedPatient.id)
+      .flatMap((appointment) => {
+        const rows = [
+          {
+            id: `${appointment.id}-status`,
+            type: 'Appointment',
+            date: `${appointment.date} ${appointment.time}`,
+            detail: `Status: ${appointment.status}`
+          }
+        ];
+
+        if (appointment.diagnosis) {
+          rows.push({
+            id: `${appointment.id}-diagnosis`,
+            type: 'Diagnosis',
+            date: appointment.date,
+            detail: appointment.diagnosis
+          });
+        }
+
+        if (appointment.prescription) {
+          rows.push({
+            id: `${appointment.id}-prescription`,
+            type: 'Prescription',
+            date: appointment.date,
+            detail: appointment.prescription
+          });
+        }
+
+        return rows;
+      });
+  }, [appointments, selectedPatient?.id]);
+
+  const doctorPrescriptions = useMemo(() => {
+    return appointments.filter((item) => item.diagnosis || item.prescription);
+  }, [appointments]);
+
+  const submitPrescription = async () => {
+    if (!selectedAppointmentId || !note.diagnosis || !note.medication) return;
+
+    try {
+      await updateAppointmentDiagnosisApi(selectedAppointmentId, {
+        diagnosis: note.diagnosis,
+        prescription: note.medication,
+        status: 'completed'
+      });
+      await loadAppointments();
+      setNote({ diagnosis: '', medication: '' });
+      pushToast({ title: 'Prescription saved', message: 'Diagnosis and prescription added to patient record.', tone: 'success' });
+    } catch (error) {
+      pushToast({ title: 'Save failed', message: error.message || 'Unable to update diagnosis', tone: 'warn' });
+    }
+  };
+
+  const queueToday = appointments.filter((item) => item.status === 'booked' || item.status === 'scheduled').length;
 
   return (
     <div className="grid">
       <h2>Doctor Dashboard</h2>
+      {loading ? <p>Loading appointments...</p> : null}
       <div className="grid kpis">
         <StatCard title="Assigned Appointments" value={appointments.length} trend={2} />
         <StatCard title="Selected Patient Events" value={patientHistory.length} trend={1} />
         <StatCard title="Prescriptions Added" value={doctorPrescriptions.length} trend={3} />
-        <StatCard title="Today Queue" value={appointments.filter((item) => item.status === 'booked').length} trend={1} />
+        <StatCard title="Today Queue" value={queueToday} trend={1} />
       </div>
 
       <DataTable
@@ -58,12 +114,21 @@ export default function ClinicianDashboard() {
         ]}
         rows={appointments}
         total={appointments.length}
-        loading={false}
-        onQueryChange={(q) => {
+        loading={loading}
+        onQueryChange={async (q) => {
           if (q.search !== undefined) {
-            const normalized = q.search.toLowerCase();
-            const first = appointments.find((item) => item.patientName.toLowerCase().includes(normalized));
-            setSelectedPatientId(first?.patientId || '');
+            const normalized = q.search.toLowerCase().trim();
+            const first = appointments.find((item) => String(item.patientName || '').toLowerCase().includes(normalized));
+            setSelectedAppointmentId(first?.id || '');
+
+            if (first?.patientId) {
+              try {
+                const patient = await getPatientApi(first.patientId);
+                setSelectedPatient(patient);
+              } catch {
+                setSelectedPatient(null);
+              }
+            }
           }
         }}
       />
@@ -90,7 +155,7 @@ export default function ClinicianDashboard() {
         ]}
         rows={patientHistory}
         total={patientHistory.length}
-        loading={false}
+        loading={loading}
         onQueryChange={() => {}}
       />
 

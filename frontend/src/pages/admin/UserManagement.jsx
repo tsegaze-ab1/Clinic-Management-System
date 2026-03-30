@@ -1,15 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import DataTable from '../../components/primitives/DataTable';
 import ModalDrawer from '../../components/primitives/ModalDrawer';
 import FormSection from '../../components/primitives/FormSection';
 import Tag from '../../components/primitives/Tag';
 import {
-  createUser as createUserRecord,
-  deleteUser,
-  getSystemReport,
-  getUsers,
-  updateUserRole
-} from '../../data/rbacMockStore';
+  createUserApi,
+  deleteUserApi,
+  getAppointmentsApi,
+  getDashboardApi,
+  getUsersApi,
+  updateUserApi
+} from '../../services/clinicApiService';
 import { useToast } from '../../context/ToastContext';
 
 const matrixColumns = [
@@ -32,28 +33,63 @@ export default function UserManagement() {
   const { pushToast } = useToast();
   const [query, setQuery] = useState({ page: 1, pageSize: 10, search: '' });
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState({ email: '', fullName: '', role: 'receptionist' });
-  const [tick, setTick] = useState(0);
+  const [draft, setDraft] = useState({ email: '', fullName: '', role: 'receptionist', password: '' });
+  const [usersData, setUsersData] = useState([]);
+  const [report, setReport] = useState({ totalUsers: 0, totalPatients: 0, totalAppointments: 0, totalPrescriptions: 0 });
+  const [loading, setLoading] = useState(true);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [usersList, dashboard, appointments] = await Promise.all([
+        getUsersApi(),
+        getDashboardApi('admin'),
+        getAppointmentsApi()
+      ]);
+
+      setUsersData(usersList);
+      setReport({
+        totalUsers: Number(dashboard.totalUsers || usersList.length),
+        totalPatients: Number(dashboard.totalPatients || 0),
+        totalAppointments: Number(dashboard.totalAppointments || appointments.length),
+        totalPrescriptions: appointments.filter((item) => item.diagnosis || item.prescription).length
+      });
+    } catch (error) {
+      pushToast({ title: 'Load failed', message: error.message || 'Unable to fetch users', tone: 'warn' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const users = useMemo(() => {
-    const all = getUsers();
+    const all = usersData;
     const term = (query.search || '').trim().toLowerCase();
     if (!term) return all;
     return all.filter((user) => user.fullName.toLowerCase().includes(term) || user.email.toLowerCase().includes(term));
-  }, [query.search, tick]);
+  }, [query.search, usersData]);
 
-  const report = useMemo(() => getSystemReport(), [tick]);
-
-  const onRoleChange = (row, nextRole) => {
-    updateUserRole(row.id, nextRole);
-    setTick((prev) => prev + 1);
-    pushToast({ title: 'Role updated', message: `${row.fullName} is now ${nextRole}.`, tone: 'success' });
+  const onRoleChange = async (row, nextRole) => {
+    try {
+      await updateUserApi(row.id, { role: nextRole });
+      await loadData();
+      pushToast({ title: 'Role updated', message: `${row.fullName} is now ${nextRole}.`, tone: 'success' });
+    } catch (error) {
+      pushToast({ title: 'Role update failed', message: error.message || 'Unable to update role', tone: 'warn' });
+    }
   };
 
-  const onDeleteUser = (row) => {
-    deleteUser(row.id);
-    setTick((prev) => prev + 1);
-    pushToast({ title: 'User deleted', message: `${row.fullName} removed from system.`, tone: 'warn' });
+  const onDeleteUser = async (row) => {
+    try {
+      await deleteUserApi(row.id);
+      await loadData();
+      pushToast({ title: 'User deleted', message: `${row.fullName} removed from system.`, tone: 'warn' });
+    } catch (error) {
+      pushToast({ title: 'Delete failed', message: error.message || 'Unable to delete user', tone: 'warn' });
+    }
   };
 
   const columns = [
@@ -81,12 +117,21 @@ export default function UserManagement() {
   ];
 
   const handleCreateUser = async () => {
-    if (!draft.fullName || !draft.email) return;
-    createUserRecord(draft);
-    setOpen(false);
-    setDraft({ email: '', fullName: '', role: 'receptionist' });
-    setTick((prev) => prev + 1);
-    pushToast({ title: 'User created', message: 'User has been added and role assigned.', tone: 'success' });
+    if (!draft.fullName || !draft.email || !draft.password) return;
+    try {
+      await createUserApi({
+        name: draft.fullName,
+        email: draft.email,
+        password: draft.password,
+        role: draft.role
+      });
+      setOpen(false);
+      setDraft({ email: '', fullName: '', role: 'receptionist', password: '' });
+      await loadData();
+      pushToast({ title: 'User created', message: 'User has been added and role assigned.', tone: 'success' });
+    } catch (error) {
+      pushToast({ title: 'Create failed', message: error.message || 'Unable to create user', tone: 'warn' });
+    }
   };
 
   return (
@@ -96,7 +141,7 @@ export default function UserManagement() {
         <button className="btn btn-primary" onClick={() => setOpen(true)}>Create User</button>
       </div>
 
-      <DataTable columns={columns} rows={users} total={users.length} loading={false} onQueryChange={setQuery} />
+      <DataTable columns={columns} rows={users} total={users.length} loading={loading} onQueryChange={setQuery} />
 
       <DataTable columns={matrixColumns} rows={permissionMatrix} total={permissionMatrix.length} loading={false} onQueryChange={() => {}} />
 
@@ -121,6 +166,7 @@ export default function UserManagement() {
         <FormSection title="User identity" hint="Admin can create doctor, receptionist, and patient users.">
           <input className="form-control" placeholder="Full name" value={draft.fullName} onChange={(e) => setDraft({ ...draft, fullName: e.target.value })} />
           <input className="form-control" placeholder="Work email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
+          <input className="form-control" placeholder="Temporary password" type="password" value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })} />
           <select className="form-select" value={draft.role} onChange={(e) => setDraft({ ...draft, role: e.target.value })}>
             <option value="admin">Admin</option>
             <option value="receptionist">Receptionist</option>

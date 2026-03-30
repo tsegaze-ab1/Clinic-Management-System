@@ -1,28 +1,72 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import StatCard from '../../components/primitives/StatCard';
 import Timeline from '../../components/primitives/Timeline';
 import Tag from '../../components/primitives/Tag';
 import IngredientPieInsights from '../../ingredients/IngredientPieInsights';
-import { getSystemReport, getUsers } from '../../data/rbacMockStore';
+import { getAppointmentsApi, getDashboardApi, getUsersApi } from '../../services/clinicApiService';
+import { useToast } from '../../context/ToastContext';
 
 export default function AdminDashboard() {
-  const report = getSystemReport();
-  const users = getUsers();
+  const { pushToast } = useToast();
+  const [report, setReport] = useState({
+    totalUsers: 0,
+    totalPatients: 0,
+    totalAppointments: 0
+  });
+  const [users, setUsers] = useState([]);
+  const [prescriptionsCount, setPrescriptionsCount] = useState(0);
+  const [loading, setLoading] = useState(true);
   const doctors = users.filter((user) => user.role === 'doctor');
   const receptionists = users.filter((user) => user.role === 'receptionist');
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function load() {
+      try {
+        setLoading(true);
+        const [dashboard, usersList, appointments] = await Promise.all([
+          getDashboardApi('admin'),
+          getUsersApi(),
+          getAppointmentsApi()
+        ]);
+
+        if (!mounted) return;
+
+        setUsers(usersList);
+        setReport({
+          totalUsers: Number(dashboard.totalUsers || usersList.length),
+          totalPatients: Number(dashboard.totalPatients || 0),
+          totalAppointments: Number(dashboard.totalAppointments || appointments.length)
+        });
+        setPrescriptionsCount(appointments.filter((item) => item.diagnosis || item.prescription).length);
+      } catch (error) {
+        pushToast({ title: 'Dashboard load failed', message: error.message || 'Unable to load admin report', tone: 'warn' });
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    load();
+
+    return () => {
+      mounted = false;
+    };
+  }, [pushToast]);
 
   const kpis = useMemo(() => {
     return [
       { title: 'Total Users', value: report.totalUsers, trend: 4 },
       { title: 'Registered Patients', value: report.totalPatients, trend: 2 },
       { title: 'Appointments', value: report.totalAppointments, trend: 3 },
-      { title: 'Prescriptions', value: report.totalPrescriptions, trend: 1 }
+      { title: 'Prescriptions', value: prescriptionsCount, trend: 1 }
     ];
-  }, [report]);
+  }, [prescriptionsCount, report]);
 
   return (
     <div className="grid fade-slide">
       <h2>Admin Dashboard</h2>
+      {loading ? <p>Loading dashboard...</p> : null}
       <div className="grid kpis stagger">
         {kpis.map((item) => (
           <StatCard key={item.title} {...item} />
