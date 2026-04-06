@@ -1,4 +1,4 @@
-# Frontend (Organizer 
+# Frontend (Organized 
 This folder is a clean, backend-ready frontend package extracted from the project.
 
 ## Included
