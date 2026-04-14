@@ -1,5 +1,5 @@
 #Frontend (Organized)
-This folder is a clean, backend-ready frontend package extracted 
+This folder is a clean, backend-ready frontend package extra
 
 ## Included
 
