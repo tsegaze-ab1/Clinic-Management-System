@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-//hghjghj
+//hghj
 export default function FormSection({ title, children, hint }) {
   return (
     <section className="page-card">
