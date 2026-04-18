@@ -1,6 +1,5 @@
 #Frontend (Organized)
-This folder is a clean, backend-ready frontend 
-
+This folder is a clean, backend-ready frontend
 ## Included
 
 - Core Vite app files: `index.html`, `package.json`, `vite.config.js`
